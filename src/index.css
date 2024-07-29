@@ -328,6 +328,20 @@ input {
   flex-direction: column;
 }
 
+.RefactorOutput {
+  flex: 2;
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  .code-block {
+    min-height: 500px;
+    overflow: auto;
+    background-color: #333;
+    color: #f1f1f1;
+    padding: 10px;
+  }
+}
+
 input:focus {
   outline: none;
 }
