@@ -50,16 +50,76 @@ function Dashboard() {
     setContextInput(context.text);
   };
 
+  const formatResponse = (response) => {
+    const lines = response.split('\n');
+    let formattedResponse = [];
+    let codeBlock = false;
+    let listBlock = false;
+    let listItems = [];
+  
+    lines.forEach((line, index) => {
+      // Check for code blocks
+      if (line.trim().startsWith('```')) {
+        if (codeBlock) {
+          formattedResponse.push(<pre key={`code-${index}`} className="code-block">{listItems.join('\n')}</pre>);
+          listItems = [];
+        }
+        codeBlock = !codeBlock;
+        return;
+      }
+  
+      if (codeBlock) {
+        listItems.push(line);
+        return;
+      }
+  
+      // Check for numbered lists
+      if (/^\d+\.\s/.test(line)) {
+        if (!listBlock) {
+          listBlock = true;
+          listItems = [];
+        }
+        listItems.push(line.replace(/^\d+\.\s/, ''));
+      } else {
+        if (listBlock) {
+          formattedResponse.push(
+            <ol key={`list-${index}`}>
+              {listItems.map((item, i) => <li key={`list-item-${i}`}>{item}</li>)}
+            </ol>
+          );
+          listBlock = false;
+          listItems = [];
+        }
+        formattedResponse.push(<p key={`text-${index}`}>{line}</p>);
+      }
+    });
+  
+    // Handle any remaining list items
+    if (listBlock) {
+      formattedResponse.push(
+        <ol key={`list-final`}>
+          {listItems.map((item, i) => <li key={`list-item-final-${i}`}>{item}</li>)}
+        </ol>
+      );
+    }
+  
+    // Handle any remaining code block items
+    if (codeBlock) {
+      formattedResponse.push(<pre key={`code-final`} className="code-block">{listItems.join('\n')}</pre>);
+    }
+  
+    return formattedResponse;
+  };
+
   const handleRefactorSubmit = () => {
     if (refactorInput.trim() === "") return;
-    // API call for refactoring
     setDisableButton(true);
-    setRefactorResponse('');
+    setRefactorResponse("");
     fetchWrapper("/refactor", localStorage.getItem("N2M-token"), "POST", {
       code: refactorInput,
     }).then((res) => {
       if (res.response) {
-        setRefactorResponse(res.response);
+        setRefactorResponse(formatResponse(res.response));
       } else {
         setConversation((prev) => [
           ...prev,
@@ -72,8 +132,8 @@ function Dashboard() {
 
   const handleAskSubmit = () => {
     if (askInput.trim() === "") return;
+    setAskInput("");
     setConversation([...conversation, { type: "question", text: askInput }]);
-    // API call for asking
     fetchWrapper("/ask", localStorage.getItem("N2M-token"), "POST", {
       question: askInput,
     }).then((res) => {
@@ -82,13 +142,13 @@ function Dashboard() {
       if (res.response) {
         setConversation((prev) => [
           ...prev,
-          { type: "answer", text: res.response },
+          { type: "answer", content: formatResponse(res.response) },
         ]);
         setAskInput("");
       } else {
         setConversation((prev) => [
           ...prev,
-          { type: "answer", text: "THERE WAS AN ERROR" },
+          { type: "answer", content: <p>THERE WAS AN ERROR</p> },
         ]);
       }
     });
@@ -115,10 +175,11 @@ function Dashboard() {
       <Navbar />
       <div className="Content">
         <div className="Paradigms">
-          <div className="SearchContainer">
+          <button onClick={() => toggleView("add-context")}>Add Context</button>
+          {/* <div className="SearchContainer">
             <p>Search paradigm context</p>
             <input className="SearchInput" type="text" />
-          </div>
+          </div> */}
           <div className="ParadigmResults">
             <p>Found {contexts.length} context docs</p>
             {contexts.map((context, index) => {
@@ -134,7 +195,6 @@ function Dashboard() {
               );
             })}
           </div>
-          <button onClick={() => toggleView("add-context")}>Add Context</button>
         </div>
         <div className="DashboardView">
           <div className="ViewToggle">
@@ -151,32 +211,6 @@ function Dashboard() {
               Ask
             </button>
           </div>
-          {view === "refactor" && (
-            <div className="RefactorView">
-              <div className="RefactorContent">
-                <div className="RefactorInput">
-                  <textarea
-                    value={refactorInput}
-                    onChange={handleRefactorInputChange}
-                    placeholder="Paste your code here for refactoring..."
-                    className="Refactor"
-                  />
-                </div>
-                {refactorResponse && (
-                  <div className="RefactorOutput">
-                    <textarea
-                      value={refactorResponse}
-                      readOnly
-                      className="Refactor"
-                    />
-                  </div>
-                )}
-              </div>
-              <button disabled={disabledButton} onClick={handleRefactorSubmit}>
-                Submit for Refactoring
-              </button>
-            </div>
-          )}
           {view === "add-context" && (
             <div className="RefactorView">
               <textarea
@@ -188,26 +222,48 @@ function Dashboard() {
               <button onClick={handleContextSubmit}>Submit Context</button>
             </div>
           )}
-          {view === "ask" && (
-            <div className="AskView">
-              <div className="Conversation">
-                {conversation.map((item, index) => (
-                  <div key={index} className={item.type}>
-                    {item.text}
-                  </div>
-                ))}
-              </div>
-              <div className="InputArea">
-                <input
-                  type="text"
-                  value={askInput}
-                  onChange={handleAskInputChange}
-                  placeholder="Ask a question..."
-                />
-                <button onClick={handleAskSubmit}>Send</button>
-              </div>
+          {view === "refactor" && (
+        <div className="RefactorView">
+          <div className="RefactorContent">
+            <div className="RefactorInput">
+              <textarea
+                value={refactorInput}
+                onChange={handleRefactorInputChange}
+                placeholder="Paste your code here for refactoring..."
+                className="Refactor"
+              />
             </div>
-          )}
+            {refactorResponse && (
+              <div className="RefactorOutput">
+                {refactorResponse}
+              </div>
+            )}
+          </div>
+          <button disabled={disabledButton} onClick={handleRefactorSubmit}>
+            Submit for Refactoring
+          </button>
+        </div>
+      )}
+      {view === "ask" && (
+        <div className="AskView">
+          <div className="Conversation">
+            {conversation.map((item, index) => (
+              <div key={index} className={item.type}>
+                {item.type === "question" ? item.text : item.content}
+              </div>
+            ))}
+          </div>
+          <div className="InputArea">
+            <input
+              type="text"
+              value={askInput}
+              onChange={handleAskInputChange}
+              placeholder="Ask a question..."
+            />
+            <button onClick={handleAskSubmit}>Send</button>
+          </div>
+        </div>
+      )}
         </div>
       </div>
     </div>
